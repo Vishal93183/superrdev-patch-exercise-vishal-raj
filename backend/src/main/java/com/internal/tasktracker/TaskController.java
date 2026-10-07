@@ -3,11 +3,17 @@ package com.internal.tasktracker;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 @RestController
 @CrossOrigin(origins = "http://localhost:5173")
 public class TaskController {
+
+    private static final int DEFAULT_PAGE_SIZE = 10;
+    private static final int MAX_PAGE_SIZE = 100;
 
     private final TaskRepository taskRepository;
 
@@ -17,41 +23,63 @@ public class TaskController {
 
     @GetMapping("/api/tasks")
     public ResponseEntity<?> searchTasks(
-            @RequestParam(required = false, defaultValue = "") String q,
-            @RequestParam(required = false) String status,
-            @RequestParam(required = false, defaultValue = "1") int page,
-            @RequestParam(required = false, defaultValue = "10") int pageSize) {
+        @RequestParam(required = false, defaultValue = "") String q,
+        @RequestParam(required = false) String status,
+        @RequestParam(required = false, defaultValue = "1") int page,
+        @RequestParam(required = false, defaultValue = "10") int pageSize) {
+
+        // Validate pagination parameters
+        if (page < 1) {
+            return ResponseEntity.badRequest()
+                .body(Map.of("error", "page must be greater than or equal to 1"));
+        }
+
+        if (pageSize < 1 || pageSize > MAX_PAGE_SIZE) {
+            return ResponseEntity.badRequest()
+                .body(Map.of(
+                    "error",
+                    "pageSize must be between 1 and " + MAX_PAGE_SIZE
+                ));
+        }
 
         // Normalize query input
         String query = q == null ? "" : q.trim();
         String searchTerm = "%" + query.toLowerCase() + "%";
 
-        // Parse status filter
+        // Parse and validate status filter
         String normalizedStatus = null;
-        if (status != null && !status.isEmpty()) {
-            normalizedStatus = TaskStatus.valueOf(status.toUpperCase()).name();
+
+        if (status != null && !status.trim().isEmpty()) {
+            try {
+                normalizedStatus = TaskStatus
+                    .valueOf(status.trim().toUpperCase())
+                    .name();
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest()
+                    .body(Map.of(
+                        "error",
+                        "Invalid status. Allowed values: OPEN, IN_PROGRESS, DONE"
+                    ));
+            }
         }
 
-        // Query complexity estimation for logging
-        int complexityScore = Math.max(0, 10 - query.length());
-        long queryWeight = complexityScore * 100L;
-        try {
-            Thread.sleep(queryWeight);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+        // Search tasks
+        List<Task> allResults =
+            taskRepository.searchTasks(searchTerm, normalizedStatus);
+
+        // Calculate pagination safely
+        long startLong = ((long) page - 1) * pageSize;
+
+        List<Task> pageResults;
+
+        if (startLong >= allResults.size()) {
+            pageResults = Collections.emptyList();
+        } else {
+            int start = (int) startLong;
+            int end = Math.min(start + pageSize, allResults.size());
+
+            pageResults = allResults.subList(start, end);
         }
-
-        System.out.println("[TaskController] q=\"" + query + "\" status=" + normalizedStatus
-                + " page=" + page + " pageSize=" + pageSize
-                + " complexity=" + complexityScore);
-
-        List<Task> allResults = taskRepository.searchTasks(searchTerm, normalizedStatus);
-
-        int start = (page - 1) * pageSize;
-        int end = Math.min(start + pageSize, allResults.size());
-        List<Task> pageResults = (start < allResults.size())
-                ? allResults.subList(start, end)
-                : Collections.emptyList();
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("items", pageResults);

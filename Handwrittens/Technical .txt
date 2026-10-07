@@ -1,0 +1,96 @@
+# Technical Exercise Notes
+
+## 1. SQL Search Filter Precedence
+
+### Issue
+The task search query had incorrect AND/OR precedence.
+
+### How I found it
+I reviewed the SQL condition and tested the search/filter logic with different combinations of archived tasks, search terms, and statuses.
+
+### Fix
+Added explicit parentheses around the title/description search condition and the optional status condition.
+
+### Why
+This ensures archived tasks are always excluded and the status filter is consistently applied.
+
+---
+
+## 2. Unnecessary Backend Delay
+
+### Issue
+The API intentionally called Thread.sleep() for every search request.
+
+### How I found it
+I traced the request flow in TaskController and noticed that every request was being delayed before querying the database.
+
+### Fix
+Removed the artificial delay.
+
+### Why
+The delay unnecessarily blocks server threads and increases API response time.
+
+---
+
+## 3. Invalid Status Handling
+
+### Issue
+Invalid status values could cause an exception.
+
+### Fix
+Added validation using TaskStatus and return HTTP 400 for invalid values.
+
+### Why
+Invalid client input should result in a clear client error instead of an internal server error.
+
+---
+
+## 4. Pagination Validation
+
+### Issue
+The API accepted invalid page and pageSize values.
+
+### Fix
+Added validation for page >= 1 and pageSize between 1 and 100.
+
+### Why
+This prevents invalid pagination requests and protects the API from unnecessarily large requests.
+
+---
+
+## 5. Frontend Request Handling
+
+### Issue
+The frontend could remain in a loading state after an API failure.
+
+### Fix
+Added proper try/catch/finally handling.
+
+### Why
+The UI should always leave the loading state after a request completes.
+
+---
+
+## 6. Stale Search Requests
+
+### Issue
+Rapid search changes could result in older requests overwriting newer results.
+
+### Fix
+Added AbortController to cancel obsolete requests.
+
+### Why
+This ensures the UI displays results for the latest search request.
+
+---
+
+## 7. Pagination After Filtering
+
+### Issue
+Changing the search or status filter could leave the user on a page that no longer exists.
+
+### Fix
+Reset pagination when search/filter values change.
+
+### Why
+Users should start from the first page of a new result set.

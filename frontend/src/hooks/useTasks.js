@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { fetchTasks } from '../api';
 
 export function useTasks(query, status, page, pageSize) {
@@ -8,18 +8,59 @@ export function useTasks(query, status, page, pageSize) {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    setLoading(true);
+    const controller = new AbortController();
+    let active = true;
 
-    fetchTasks({ query, status, page, pageSize })
-      .then((data) => {
-        setTasks(data.items);
-        setTotal(data.total);
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError(err.message);
-      });
+    async function loadTasks() {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const data = await fetchTasks({
+          query,
+          status,
+          page,
+          pageSize,
+          signal: controller.signal
+        });
+
+        if (!active) {
+          return;
+        }
+
+        setTasks(Array.isArray(data.items) ? data.items : []);
+        setTotal(Number.isFinite(data.total) ? data.total : 0);
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          return;
+        }
+
+        if (!active) {
+          return;
+        }
+
+        setTasks([]);
+        setTotal(0);
+        setError(err.message || 'Failed to load tasks.');
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadTasks();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [query, status, page, pageSize]);
 
-  return { tasks, total, loading, error };
+  return {
+    tasks,
+    total,
+    loading,
+    error
+  };
 }

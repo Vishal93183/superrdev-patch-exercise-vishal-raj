@@ -1,0 +1,13 @@
+Bug: SQL AND/OR precedence
+
+Issue:
+Archived tasks could appear in search results.
+
+How I found it:
+I reviewed the repository query and tested search with archived data.
+
+Fix:
+I added parentheses around the title/description conditions.
+
+Why:
+This ensures archived tasks are always excluded.
